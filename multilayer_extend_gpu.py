@@ -30,6 +30,8 @@ class MultiLayerNetExtend:
                 scale = np.sqrt(2.0/all_layers[i-1])
             if weight_init == "xavier":
                 scale = np.sqrt(1.0/all_layers[i-1])
+            if weight_init == "none":
+                scale = 1.0
             self.params["Weight"+str(i)] = scale * np.random.randn(all_layers[i-1], all_layers[i])
             self.params["Bias"+str(i)] = np.zeros(all_layers[i])
             if self.batch_norm and i != len(all_layers)-1:
