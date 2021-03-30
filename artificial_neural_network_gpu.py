@@ -15,8 +15,9 @@ class ArtificialNeuralNetwork:
         self.hidden, self.act_func, self.weight_init = hidden, act_func, weight_init
         self.batch_norm = batch_norm
         self.output_size = output_size
+        self.lastlayer_identity = lastlayer_identity
         self.loss_func = loss_func
-        self.network = MultiLayerNetExtend(input_size*2, hidden, act_func, weight_init, batch_norm, output_size, lastlayer_identity, loss_func)
+        self.network = None
         self.is_epoch_in_each_mlist = is_epoch_in_each_mlist
         if self.is_epoch_in_each_mlist:
             self.loss_val = {}
@@ -100,15 +101,19 @@ class ArtificialNeuralNetwork:
 
         ##Initialize the self-variables.
         ##Make datasets.
+        print("Make a train/test dataset.")
         if self.is_epoch_in_each_mlist:
             for m_key in m_list:
                 self.loss_val[m_key] = []
                 self.train_acc[m_key], self.test_acc[m_key] = [], []
             train_input, train_output, train_input_dict, train_output_dict, test_input_dict, test_output_dict = self.__set_dataset2(train, test)
+            print("Train dataset size : {}".format(train_input.shape[0]))
         else:
             train_input, train_output, test_input, test_output = self.__set_dataset1(train, test)
-        print("Make a train/test dataset.")
-        print("Train dataset size : {}\nTest dataset size : {}".format(train_input.shape[0], test_input.shape[0]))
+            print("Train dataset size : {}\nTest dataset size : {}".format(train_input.shape[0], test_input.shape[0]))
+
+        ##Define Machine Learning Model.
+        self.network = MultiLayerNetExtend(train_input.shape[1], self.hidden, self.act_func, self.weight_init, self.batch_norm, train_output.shape[1], self.lastlayer_identity, self.loss_func)
 
         ##Define the optimizer.
         learning_rate = float(lr)
@@ -137,6 +142,8 @@ class ArtificialNeuralNetwork:
             ##Save loss_values, train/test_accuracy_value of the self.network to self.loss_val, self.train_acc, self.test_acc.
             if i % iter_per_epoch == 0:
                 if self.is_epoch_in_each_mlist:
+                    if i % (10 * iter_per_epoch) == 0:
+                        print("{}epoch.".format(int(i / iter_per_epoch)))
                     for m_key in m_list:
                         loss_val = self.network.loss(cupy.asarray(train_input_dict[m_key]), cupy.asarray(train_output_dict[m_key]), is_training = False)
                         self.loss_val[m_key].append(loss_val)
@@ -144,6 +151,9 @@ class ArtificialNeuralNetwork:
                         self.train_acc[m_key].append(train_acc)
                         test_acc = self.network.accuracy(cupy.asarray(test_input_dict[m_key]), cupy.asarray(test_output_dict[m_key]), is_training = False)
                         self.test_acc[m_key].append(test_acc)
+                        if i % (10 * iter_per_epoch) == 0:
+                            print("-----{}-----".format(m_key[11:16]))
+                            print("loss_val : {}\ntrain_acc : {}\ntest_acc : {}".format(loss_val, train_acc, test_acc))
                 else:
                     loss_val = self.network.loss(cupy.asarray(train_input), cupy.asarray(train_output), is_training = False)
                     self.loss_val.append(loss_val)
@@ -158,18 +168,17 @@ class ArtificialNeuralNetwork:
     def predict(self, dataset, is_RMT = True):
         m_list = dataset.keys()
         prediction = {}
-        data_input = {}
         if is_RMT:
             RMT = {}
         for m_key in m_list:
             if is_RMT:
                 RMT[m_key] = ReshapeMergerTree()
-                data_input[m_key], _ = RMT[m_key].make_dataset(dataset[m_key], self.input_size, self.output_size)
+                data_input, _ = RMT[m_key].make_dataset(dataset[m_key], self.input_size, self.output_size)
             else:
-                data_input[m_key] = dataset[m_key]
-            data_input[m_key] = self.Norm_input.run_predict(data_input[m_key])
-            data_input[m_key] = cupy.asarray(data_input[m_key])
-            prediction[m_key] = self.network.predict(data_input[m_key], is_training = False)
+                data_input = dataset[m_key]
+            data_input = self.Norm_input.run_predict(data_input)
+            data_input = cupy.asarray(data_input)
+            prediction[m_key] = self.network.predict(data_input, is_training = False)
             prediction[m_key] = cupy.asnumpy(prediction[m_key])
             prediction[m_key] = self.Norm_output.inv_run_predict(prediction[m_key])
             if is_RMT:
