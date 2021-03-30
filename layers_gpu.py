@@ -24,6 +24,8 @@ def loss_function(loss_func):
         return MSE_AbsoluteError()
     if loss_func == "RE":
         return RelativeError()
+    if loss_func == "AE":
+        return AbsoluteError()
     else:
         print("{} is not defined.".format(loss_func))
         return None
@@ -165,6 +167,23 @@ class RelativeError:
 
     def backward(self, dout = 1.0):
         dout /= self.t * self.t.size
+        dout[self.mask] *= -1.0
+        return dout
+
+
+class AbsoluteError:
+    def __init__(self):
+        self.mask = None
+        self.shape = None
+
+    def forward(self, x, t):
+        error = y - t
+        self.mask = (error < 0.0)
+        self.shape = error.shape
+        return np.mean(np.abs(error))
+
+    def backward(self, dout = 1.0):
+        dout *= np.ones(self.shape)
         dout[self.mask] *= -1.0
         return dout
 
