@@ -162,7 +162,7 @@ class ArtificialNeuralNetwork:
         if is_RMT:
             RMT = {}
         for m_key in m_list:
-            if RMT_flag:
+            if is_RMT:
                 RMT[m_key] = ReshapeMergerTree()
                 data_input[m_key], _ = RMT[m_key].make_dataset(dataset[m_key], self.input_size, self.output_size)
             else:
@@ -172,7 +172,7 @@ class ArtificialNeuralNetwork:
             prediction[m_key] = self.network.predict(data_input[m_key], is_training = False)
             prediction[m_key] = cupy.asnumpy(prediction[m_key])
             prediction[m_key] = self.Norm_output_.inv_run_predict(prediction[m_key])
-            if RMT_flag:
+            if is_RMT:
                 prediction[m_key] = RMT[m_key].restore_mergertree(prediction[m_key])
         return prediction
     
