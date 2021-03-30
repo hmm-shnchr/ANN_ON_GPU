@@ -176,7 +176,7 @@ class AbsoluteError:
         self.mask = None
         self.shape = None
 
-    def forward(self, x, t):
+    def forward(self, y, t):
         error = y - t
         self.mask = (error < 0.0)
         self.shape = error.shape
