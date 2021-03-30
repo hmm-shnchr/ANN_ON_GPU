@@ -167,11 +167,11 @@ class ArtificialNeuralNetwork:
                 data_input[m_key], _ = RMT[m_key].make_dataset(dataset[m_key], self.input_size, self.output_size)
             else:
                 data_input[m_key] = dataset[m_key]
-            data_input[m_key] = self.Norm_input_.run_predict(data_input[m_key])
+            data_input[m_key] = self.Norm_input.run_predict(data_input[m_key])
             data_input[m_key] = cupy.asarray(data_input[m_key])
             prediction[m_key] = self.network.predict(data_input[m_key], is_training = False)
             prediction[m_key] = cupy.asnumpy(prediction[m_key])
-            prediction[m_key] = self.Norm_output_.inv_run_predict(prediction[m_key])
+            prediction[m_key] = self.Norm_output.inv_run_predict(prediction[m_key])
             if is_RMT:
                 prediction[m_key] = RMT[m_key].restore_mergertree(prediction[m_key])
         return prediction
