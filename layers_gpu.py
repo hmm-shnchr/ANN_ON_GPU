@@ -22,6 +22,8 @@ def loss_function(loss_func):
         return MSE_RelativeError()
     if loss_func == "MSE_AE":
         return MSE_AbsoluteError()
+    if loss_func == "RE":
+        return RelativeError()
     else:
         print("{} is not defined.".format(loss_func))
         return None
@@ -148,6 +150,23 @@ class MSE_AbsoluteError:
 
     def backward(self, dout = 1):
         return dout * 2.0 * (self.y - self.t) / float(self.y.size)
+
+
+class RelativeError:
+    def __init__(self):
+        self.t = None
+        self.mask = None
+
+    def forward(self, y, t):
+        self.t = t
+        error = (y - t) / t
+        self.mask = (error < 0.0)
+        return np.mean(np.abs(error))
+
+    def backward(self, dout = 1.0):
+        dout /= self.t * self.t.size
+        dout[self.mask] *= -1.0
+        return dout
 
 
 class BatchNormalization:
