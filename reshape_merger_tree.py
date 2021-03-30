@@ -11,6 +11,14 @@ class ReshapeMergerTree:
         self.input_size = None
 
     def make_dataset(self, data, input_size, output_size):
+        ##Initialize.
+        self.array_input = None
+        self.array_output = None
+        self.surplus_list = []
+        self.rowsize_list = []
+        self.skiprow_dict = {}
+        self.input_size = None
+        
         self.input_size = input_size
         unity_size = input_size+output_size
 
