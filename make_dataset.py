@@ -24,6 +24,8 @@ def make_dataset(m_list, p_kind, h_param, param, ext_data, acc_sf, input_size, o
                 ##If p_kind is coordinate, use relative value of sub-halo to host-halo.
                 data = parameter[start_i:]
                 host_i = data.size
+                if data.size > h_param[p_kind][m_key].size:
+                    continue
                 data -= h_param[p_kind][m_key][-host_i:]
             else:
                 data = parameter[start_i:]
