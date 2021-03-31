@@ -26,6 +26,14 @@ def loss_function(loss_func):
         return RelativeError()
     if loss_func == "AE":
         return AbsoluteError()
+    if loss_func == "Log_RE":
+        return Log_RelativeError()
+    if loss_func == "Sqrt_RE":
+        return Sqrt_RelativeError()
+    if loss_func == "Sqrt_AE":
+        return Sqrt_AbsoluteError()
+    if loss_func == "RE_to_MSE_RE":
+        return RE_to_MSE_RE()
     else:
         print("{} is not defined.".format(loss_func))
         return None
@@ -175,16 +183,97 @@ class AbsoluteError:
     def __init__(self):
         self.mask = None
         self.shape = None
+        self.size = None
 
     def forward(self, y, t):
         error = y - t
         self.mask = (error < 0.0)
         self.shape = error.shape
+        self.size = error.size
         return np.mean(np.abs(error))
 
     def backward(self, dout = 1.0):
-        dout *= np.ones(self.shape)
+        dout *= np.ones(self.shape) / float(self.size)
         dout[self.mask] *= -1.0
+        return dout
+
+
+class Log_RelativeError:
+    def __init__(self):
+        self.y = None
+        self.t = None
+
+    def forward(self, y, t):
+        self.y = y
+        self.t = t
+        error = (y - t) / t
+        return np.mean(np.log(np.abs(error)))
+
+    def backward(self, dout = 1.0):
+        dout /= (self.y - self.t) * self.y.size
+        return dout
+
+
+class Sqrt_RelativeError:
+    def __init__(self):
+        self.y = None
+        self.t = None
+        self.mask = None
+
+    def forward(self, y, t):
+        self.y = y
+        self.t = t
+        error = (y - t) / t
+        self.mask = (error < 0.0)
+        return 2.0 * np.mean(np.sqrt(np.abs(error)))
+
+    def backward(self, dout = 1.0):
+        dout /= float(self.y.size) * np.sqrt(np.abs((self.y - self.t) / self.t)) * self.t
+        dout[self.mask] *= -1.0
+        return dout
+
+
+class Sqrt_AbsoluteError:
+    def __init__(self):
+        self.error = None
+        self.mask = None
+
+    def forward(self, y, t):
+        self.mask = ((y - t) < 0.0)
+        self.error = np.sqrt(np.abs(y - t))
+        return 2.0 * np.mean(self.error)
+
+    def backward(self, dout = 1.0):
+        dout /= float(self.error.size) * self.error
+        dout[self.mask] *= -1.0
+        return dout
+
+
+class RE_to_MSE_RE:
+    def __init__(self):
+        self.y = None
+        self.t = None
+        self.mask_border = None
+
+    def forward(self, y, t):
+        self.y = y
+        self.t = t
+        error = (y - t) / t
+        self.mask_border = (np.abs(error) < 1.0)
+        error[self.mask_border] = error[self.mask_border]**2 / 2.0
+        error = np.abs(error)
+        error[self.mask_border == False] -= 0.5
+        return np.mean(np.abs(error))
+
+    def backward(self, dout = 1.0):
+        dout *= np.ones_like(self.y)
+        dout[self.mask_border == False] /= self.t[self.mask_border == False]
+        error = (self.y - self.t) / self.t
+        mask = (error == 0.0)
+        error[mask] += 1e-7
+        dout *= error / np.abs(error)
+        dout[self.mask_border == True] = (self.y[self.mask_border == True] - self.t[self.mask_border == True]) / self.t[self.mask_border == True]**2
+        dout /= float(self.y.size)
         return dout
 
 
