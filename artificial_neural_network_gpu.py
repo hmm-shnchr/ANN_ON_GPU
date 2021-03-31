@@ -2,11 +2,12 @@ from multilayer_extend_gpu import MultiLayerNetExtend
 from reshape_merger_tree import ReshapeMergerTree
 from normalization import Normalization
 from optimizer_gpu import set_optimizer
+from layers_gpu import *
 import matplotlib.pyplot as plt
+import copy as cp
 import numpy as np
 import cupy
-import copy as cp
-import os, sys, shutil
+import os, sys
 
 
 class ArtificialNeuralNetwork:
@@ -58,7 +59,6 @@ class ArtificialNeuralNetwork:
 
         return train_input, train_output, test_input, test_output
 
-
     def __set_dataset2(self, train, test):
         m_list = list(train.keys())
         RMT = ReshapeMergerTree()
@@ -97,11 +97,10 @@ class ArtificialNeuralNetwork:
         
     def learning(self, train, test, opt, lr, batchsize_denominator, epoch, m_list, norm_format):
         self.norm_format = norm_format
-        m_list = list(train.keys())
 
         ##Initialize the self-variables.
         ##Make datasets.
-        print("Make a train/test dataset.")
+        print("Make train/test datasets.")
         if self.is_epoch_in_each_mlist:
             for m_key in m_list:
                 self.loss_val[m_key] = []
@@ -115,11 +114,11 @@ class ArtificialNeuralNetwork:
         ##Define Machine Learning Model.
         self.network = MultiLayerNetExtend(train_input.shape[1], self.hidden, self.act_func, self.weight_init, self.batch_norm, train_output.shape[1], self.lastlayer_identity, self.loss_func)
 
-        ##Define the optimizer.
+        ##Define a optimizer.
         learning_rate = float(lr)
         optimizer = set_optimizer(opt, learning_rate)
 
-        ##Define the number of iterations.
+        ##Define number of iterations.
         rowsize_train = train_input.shape[0]
         batch_mask_arange = np.arange(rowsize_train)
         batch_size = int(rowsize_train/batchsize_denominator)
@@ -164,6 +163,80 @@ class ArtificialNeuralNetwork:
                     if i % (10 * iter_per_epoch) == 0:
                         print("{}epoch.".format(int(i / iter_per_epoch)))
                         print("loss_val : {}\ntrain_acc : {}\ntest_acc : {}".format(loss_val, train_acc, test_acc))
+
+    def additional_learning(self, train, test, loss_func, opt, lr, batchsize_denominator, epoch, m_list, norm_format):
+        self.loss_func = loss_func
+        self.norm_format = norm_format
+
+        ##Make datasets.
+        print("Make train/test datasets.")
+        if self.is_epoch_in_each_mlist:
+            self.loss_val = {}
+            self.train_acc, self.test_acc = {}, {}
+            for m_key in m_list:
+                self.loss_val[m_key] = []
+                self.train_acc[m_key], self.test_acc[m_key] = [], []
+            train_input, train_output, train_input_dict, train_output_dict, test_input_dict, test_output_dict = self.__set_dataset2(train, test)
+            print("Train dataset size : {}".format(train_input.shape[0]))
+        else:
+            self.loss_val = []
+            self.train_acc, self.test_acc = [], []
+            train_input, train_output, test_input, test_output = self.__set_dataset1(train, test)
+            print("Train dataset size : {}\nTest dataset size : {}".format(train_input.shape[0], test_input.shape[0]))
+
+        ##Redifine Machine Learning model with new parameters.
+        self.network.lastlayer = loss_function(self.loss_func)
+
+        ##Define a optimizer.
+        learning_rate = float(lr)
+        optimizer = set_optimizer(opt, learning_rate)
+
+        ##Define number of iterations.
+        rowsize_train = train_input.shape[0]
+        batch_mask_arange = np.arange(rowsize_train)
+        batch_size = int(rowsize_train/batchsize_denominator)
+        iter_per_epoch = int(rowsize_train/batch_size)
+        iter_num = iter_per_epoch * epoch
+        print("Mini-batch size : {}\nIterations per 1epoch : {}\nIterations : {}".format(batch_size, iter_per_epoch, iter_num))
+
+        ##Start learning.
+        for i in range(iter_num):
+            ##Make a mini batch.
+            batch_mask = np.random.choice(batch_mask_arange, batch_size)
+            batch_input, batch_output = cupy.asarray(train_input[batch_mask, :]), cupy.asarray(train_output[batch_mask, :])
+
+            ##Update the self.network.params with grads.
+            grads = self.network.gradient(batch_input, batch_output, is_training = True)
+            params_network = self.network.params
+            optimizer.update(params_network, grads)
+
+            ##When the iteration i reaches a multiple of iter_per_epoch,
+            ##Save loss_values, train/test_accuracy_value of the self.network to self.loss_val, self.train_acc, self.test_acc.
+            if i % iter_per_epoch == 0:
+                if self.is_epoch_in_each_mlist:
+                    if i % (10 * iter_per_epoch) == 0:
+                        print("{}epoch.".format(int(i / iter_per_epoch)))
+                    for m_key in m_list:
+                        loss_val = self.network.loss(cupy.asarray(train_input_dict[m_key]), cupy.asarray(train_output_dict[m_key]), is_training = False)
+                        self.loss_val[m_key].append(loss_val)
+                        train_acc = self.network.accuracy(cupy.asarray(train_input_dict[m_key]), cupy.asarray(train_output_dict[m_key]), is_training = False)
+                        self.train_acc[m_key].append(train_acc)
+                        test_acc = self.network.accuracy(cupy.asarray(test_input_dict[m_key]), cupy.asarray(test_output_dict[m_key]), is_training = False)
+                        self.test_acc[m_key].append(test_acc)
+                        if i % (10 * iter_per_epoch) == 0:
+                            print("-----{}-----".format(m_key[11:16]))
+                            print("loss_val : {}\ntrain_acc : {}\ntest_acc : {}".format(loss_val, train_acc, test_acc))
+                else:
+                    loss_val = self.network.loss(cupy.asarray(train_input), cupy.asarray(train_output), is_training = False)
+                    self.loss_val.append(loss_val)
+                    train_acc = self.network.accuracy(cupy.asarray(train_input), cupy.asarray(train_output), is_training = False)
+                    self.train_acc.append(train_acc)
+                    test_acc = self.network.accuracy(cupy.asarray(test_input), cupy.asarray(test_output), is_training = False)
+                    self.test_acc.append(test_acc)
+                    if i % (10 * iter_per_epoch) == 0:
+                        print("{}epoch.".format(int(i / iter_per_epoch)))
+                        print("loss_val : {}\ntrain_acc : {}\ntest_acc : {}".format(loss_val, train_acc, test_acc))
+
                     
     def predict(self, dataset, is_RMT = True):
         m_list = dataset.keys()
